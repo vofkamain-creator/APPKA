@@ -2,17 +2,14 @@ import { useMemo, useState } from "react";
 
 /* ========================================================================
    TĚLESNÝ ZÁPIS — KOMPLETNÍ PROTOTYP
-   - Identifikace hodiny (typ školy → škola → učitel → třída → místo)
-   - Úvodní část (zahřátí)
-   - Hlavní část (oblast → disciplína/hra → co se dělo → charakter → kdo vedl)
-   - „Jiná/Jiný (doplňte ručně)“ u oblasti, disciplíny i zaměření
-   - Logika „bez tandemu = vede učitel(ka)“
-   - Náhled a základní validace
+   Fixes:
+   - Correct validation for all “Jiná / other” branches so the submit button enables
+   - Minor typo fix (text_sm → text-sm)
    ======================================================================== */
 
 /** === Your Apps Script Web App URL (from Deploy → Web app → /exec) === */
 const WEB_APP_URL =
-  "https://script.google.com/macros/s/AKfycbztZ3eItDE9a6ynCbeqn9dYNrzDW9D-j4UB6v_7xQ2cuK_SY369m0tYruPzLVQqYu3o/exec";
+  "https://script.google.com/macros/s/AKfycbxR2yrJ30j6wUYg1uCL0Pd524U-yNj29rBe6G-8WqRfh_Hi5gJq9unfcgkhfj4kMU1r/exec";
 
 /* ===================== ZÁKLADNÍ DATOVÉ TYPY A POMOCNÉ LABELY ===================== */
 
@@ -72,13 +69,10 @@ const WARMUPS = [
 ];
 
 /* ===================== HLAVNÍ ČÁST — OBLASTI, DISCIPLÍNY, ZAMĚŘENÍ ===================== */
-/* Každá oblast má seznam disciplín/her a pro každou disciplínu seznam zaměření („co se dělo“).
-   Všechny selecty mají navíc položku „Jiná/Jiný (doplňte ručně)“ s textovým polem.   */
 
-// --- SPORTOVNÍ HRY (širší než jen míčové) ---
+// --- SPORTOVNÍ HRY ---
 const GAMES = [
   "vybijena","hazena","basketbal","volejbal","fotbal","prehazovana","florbal","frisbee","kinball","tchoukball","netball",
-  // doplňkové (pro větší šíři):
   "ringtenis","nohejbal","rugby_tag","pálkované_hry","korfbal"
 ] as const;
 type Game = typeof GAMES[number];
@@ -337,7 +331,6 @@ export default function App() {
   const [warmup, setWarmup] = useState("");
 
   /* --- Hlavní část --- */
-  // Oblasti (fixní 4 + „jiná oblast“)
   const AREAS = ["sportovni_hry","atletika","gymnastika","upoly"] as const;
   type Area = typeof AREAS[number];
   const AREA_LABEL: Record<Area,string> = {
@@ -348,12 +341,12 @@ export default function App() {
   };
 
   const [area,       setArea]       = useState<"" | Area | "other">("");
-  const [areaOther,  setAreaOther]  = useState("");     // text pro „Jiná oblast“
-  const [discipline, setDiscipline] = useState("");     // konkrétní hra/okruh nebo „other“
-  const [discOther,  setDiscOther]  = useState("");     // text pro „Jiná disciplína“
-  const [focus,      setFocus]      = useState("");     // co se dělo (nebo „other“)
-  const [focusOther, setFocusOther] = useState("");     // text pro „Jiná činnost“
-  const [character,  setCharacter]  = useState("");     // 6 typů
+  const [areaOther,  setAreaOther]  = useState("");
+  const [discipline, setDiscipline] = useState("");
+  const [discOther,  setDiscOther]  = useState("");
+  const [focus,      setFocus]      = useState("");
+  const [focusOther, setFocusOther] = useState("");
+  const [character,  setCharacter]  = useState("");
   const [leader,     setLeader]     = useState<"" | "ucitel" | "tandem" | "trener" | "zak">("");
 
   // Datum pro záznam
@@ -391,13 +384,13 @@ export default function App() {
     if (discipline === "other") return [];
     switch (area) {
       case "sportovni_hry":
-        return GAME_CONTENT[discipline as any] ?? [];
+        return GAME_CONTENT[discipline as Game] ?? [];
       case "atletika":
-        return ATHLETICS_CONTENT[discipline as any] ?? [];
+        return ATHLETICS_CONTENT[discipline as unknown as keyof typeof ATHLETICS_CONTENT] ?? [];
       case "gymnastika":
-        return GYM_CONTENT[discipline as any] ?? [];
+        return GYM_CONTENT[discipline as unknown as keyof typeof GYM_CONTENT] ?? [];
       case "upoly":
-        return UPOLY_CONTENT[discipline as any] ?? [];
+        return UPOLY_CONTENT[discipline as unknown as keyof typeof UPOLY_CONTENT] ?? [];
       default:
         return [];
     }
@@ -408,7 +401,6 @@ export default function App() {
     setSchoolType(val);
     setSchoolId("");
     setTeacher("");
-    // Bez tandemu = vede učitel pevně
     if (val === "notandem") setLeader("ucitel");
     else setLeader("");
   };
@@ -445,16 +437,16 @@ export default function App() {
     if (!a) return "";
     if (a === "other") return other || "(jiná oblast – prázdná)";
     return AREA_LABEL[a as Area] ?? String(a);
-    };
+  };
 
   const disciplineLabel = (a: typeof area, d: string, dOther: string): string => {
     if (!a || !d) return "";
     if (d === "other") return dOther || "(jiná disciplína – prázdná)";
     switch (a) {
-      case "sportovni_hry": return GAME_LABEL[d as any] ?? d;
-      case "atletika":      return ATHLETICS_LABEL[d as any] ?? d;
-      case "gymnastika":    return GYM_LABEL[d as any] ?? d;
-      case "upoly":         return UPOLY_LABEL[d as any] ?? d;
+      case "sportovni_hry": return GAME_LABEL[d as Game] ?? d;
+      case "atletika":      return ATHLETICS_LABEL[d as unknown as keyof typeof ATHLETICS_LABEL] ?? d;
+      case "gymnastika":    return GYM_LABEL[d as unknown as keyof typeof GYM_LABEL] ?? d;
+      case "upoly":         return UPOLY_LABEL[d as unknown as keyof typeof UPOLY_LABEL] ?? d;
       default: return d;
     }
   };
@@ -463,18 +455,31 @@ export default function App() {
     if (!a || !d || !f) return "";
     if (f === "other") return fOther || "(jiná činnost – prázdná)";
     const list =
-      a === "sportovni_hry" ? GAME_CONTENT[d as any] :
-      a === "atletika"      ? ATHLETICS_CONTENT[d as any] :
-      a === "gymnastika"    ? GYM_CONTENT[d as any] :
-      a === "upoly"         ? UPOLY_CONTENT[d as any] : [];
+      a === "sportovni_hry" ? GAME_CONTENT[d as Game] :
+      a === "atletika"      ? ATHLETICS_CONTENT[d as unknown as keyof typeof ATHLETICS_CONTENT] :
+      a === "gymnastika"    ? GYM_CONTENT[d as unknown as keyof typeof GYM_CONTENT] :
+      a === "upoly"         ? UPOLY_CONTENT[d as unknown as keyof typeof UPOLY_CONTENT] : [];
     return list.find(x => x.value === f)?.label ?? f;
   };
 
-  /* --- Validace odeslání --- */
+  /* --- Validace odeslání (FIXED for “other” paths) --- */
+  const usingOtherArea        = area === "other";
+  const usingOtherDiscipline  = discipline === "other";
+  const usingOtherFocus       = focus === "other";
+
   const isMainFilled =
-    (area && (area !== "other" ? !!discipline : !!areaOther.trim())) &&
-    (discipline !== "other" ? !!focus : true) &&
-    ((discipline === "other") || (focus !== "other" ? true : !!focusOther.trim()));
+    // 1) area chosen
+    !!area &&
+    // 2) discipline present (for area=other we require discOther text; else selected value)
+    (usingOtherArea ? !!discOther.trim() : !!discipline) &&
+    // 3) focus present:
+    (
+      usingOtherArea
+        ? !!focusOther.trim()                                  // area=other → focusOther text
+        : usingOtherDiscipline
+          ? !!focusOther.trim()                                // discipline=other → focusOther text
+          : (usingOtherFocus ? !!focusOther.trim() : !!focus)  // normal path → either focus select OR focusOther when "other"
+    );
 
   const canSubmit =
     !!schoolType &&
@@ -645,7 +650,6 @@ export default function App() {
                    "Disciplína / hra"}
                 </label>
 
-                {/* Pokud je zvolena jiná oblast, rovnou nabídneme „jinou disciplínu“ (pole) */}
                 {area === "other" ? (
                   <input
                     className="w-full border rounded p-2"
@@ -682,7 +686,7 @@ export default function App() {
             {/* 2) CO SE DĚLO (ZAMĚŘENÍ) */}
             {(area && ((area === "other" && discOther.trim()) || (area !== "other" && discipline))) && (
               <>
-                <label className="block text_sm font-medium mt-4 mb-1">Co se dělo (zaměření)</label>
+                <label className="block text-sm font-medium mt-4 mb-1">Co se dělo (zaměření)</label>
 
                 {(area === "other" || discipline === "other") ? (
                   <input
@@ -801,23 +805,20 @@ export default function App() {
                 warmup,
                 area,
                 discipline,
-                disciplineOther: discOther, // << z Reactu se jmenuje discOther
+                disciplineOther: discOther,
                 focus,
-                focusOther, // << zůstává stejné
+                focusOther,
                 character,
                 leader,
               };
 
               try {
-                const response = await fetch(
-                  WEB_APP_URL,
-                  {
-                    method: "POST",
-                    mode: "no-cors",
-                    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-                    body: "data=" + encodeURIComponent(JSON.stringify(payload)),
-                  }
-                );
+                const response = await fetch(WEB_APP_URL, {
+                  method: "POST",
+                  mode: "no-cors",
+                  headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                  body: "data=" + encodeURIComponent(JSON.stringify(payload)),
+                });
 
                 console.log("Fetch dokončen", response);
                 alert("✅ Záznam byl odeslán do Google Sheets!");
